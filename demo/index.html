@@ -1,0 +1,354 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="initial-scale=1,maximum-scale=1,user-scalable=no" />
+    <title>arcgis</title>
+
+    <link rel="stylesheet" href="https://js.arcgis.com/4.27/esri/themes/light/main.css" />
+    <script src="https://js.arcgis.com/4.27/"></script>
+
+    <style>
+      html,
+      body,
+      #viewDiv {
+        padding: 0;
+        margin: 0;
+        height: 100%;
+        width: 100%;
+      }
+
+    </style>
+
+    <script>
+    	
+      require([
+      "esri/Map",
+      "esri/views/MapView",
+      "esri/portal/Portal",
+      "esri/widgets/BasemapGallery",
+      "esri/widgets/BasemapGallery/support/PortalBasemapsSource",
+      "esri/widgets/Expand", 
+'esri/layers/FeatureLayer',
+'esri/layers/GraphicsLayer',
+'esri/Graphic',
+'esri/geometry/Polyline',
+'esri/geometry/Point'
+    ], function(
+      Map,
+      MapView,
+      Portal,
+      BasemapGallery,
+      PortalBasemapsSource,
+      Expand,
+      FeatureLayer,
+      GraphicsLayer,
+Graphic,
+Polyline,
+Point
+    ) {
+
+
+
+
+      const map = new Map({
+        basemap: {
+          portalItem: {
+            id: "8d91bd39e873417ea21673e0fee87604" // nova basemap
+          }
+        }
+      });
+
+      // center the view over 48 states
+      const view = new MapView({
+        container: "viewDiv",
+        map: map,
+        center: [109.5, 38.3],
+        zoom: 10,
+        constraints: {
+          snapToZoom: false
+        }
+      });
+
+      
+ var  mapview = view
+ var   layerline = creatGraphicLayer('tb_lineid')
+ var   layerp = creatGraphicLayer('tb_clpointid')
+ var   paths =  []
+ var   points = []
+ var   image = ""
+ var   startNum = 0
+ var   endNum = 1
+ var   moving = null
+var    moveCarGra = null
+var    angleSet = 0
+ var   speed=0.002
+ function setSymbolAndAngle (url, angle) {
+  return {
+    type: 'picture-marker', // autocasts as new PictureMarkerSymbol()
+    url: url,
+    // 没有矩形.png,注销了
+    width: '24px',
+    height: '44px',
+    angle: angle
+  }
+}
+ function setSymbol  (url)  {
+  return {
+    type: 'picture-marker', // autocasts as new PictureMarkerSymbol()
+    url: url,
+    // 没有矩形.png,注销了
+    width: '16px',
+    height: '16px'
+  }
+}
+ function getLayerByid(lyrid) {
+    const pLayer = mapview.map.findLayerById(lyrid)
+    return pLayer
+  }
+ function reMoveLayerByid (lyrid)  {
+    const pLayer = getLayerByid(lyrid)
+    if (pLayer) {
+     mapview.map.remove(pLayer)
+    }
+  }      
+        // 创建临时图层
+  function creatGraphicLayer(id, url) {
+    let pLayer = getLayerByid(id)
+    if (pLayer) {
+     mapview.map.remove(pLayer)
+    }
+    pLayer = new GraphicsLayer()
+    pLayer.id = id
+    mapview.map.add(pLayer)
+    return pLayer
+  } 
+       // 计算图片角度
+  function calcAngle(x1, y1, x2, y2) {
+    const tan = (Math.atan(Math.abs((y2 - y1) / (x2 - x1))) * 180) / Math.PI + 90
+    if (x2 > x1 && y2 > y1) {
+      return -tan + 180
+    } else if (x2 > x1 && y2 < y1) {
+      return tan
+    } else if (x2 < x1 && y2 > y1) {
+      return tan - 180
+    } else if (y2 === y1 && x2 > x1) {
+      return 90
+    } else if (y2 === y1 && x2 < x1) {
+      return -90
+    } else if (y2 > y1 && x2 === x1) {
+      return 0
+    } else if (y2 < y1 && x2 === x1) {
+      return 180
+    } else {
+      return -tan
+    }
+  }
+
+  function loadMapLineAndPoints() {
+   paths.forEach(itm => {
+      let pGraphic = new Graphic({
+        geometry: new Polyline({ paths: [itm], spatialReference: { wkid: 4326 } }),
+        symbol: {
+          type: 'simple-line',
+          color: [226, 119, 40],
+          width: 4
+        }
+      })
+     layerline.add(pGraphic)
+    })
+
+   mapview.map.add(layerline)
+
+    const pGraphics = []
+   points.forEach((itm, index) => {
+      itm.id = index
+      const gpoint = new Graphic({
+        geometry: new Point({
+          x: itm.LNG,
+          y: itm.LAT
+        }),
+        attributes: itm
+
+      })
+      pGraphics.push(gpoint)
+    })
+    const pFlayer = new FeatureLayer({
+      id: 'qcpointid',
+      source: pGraphics,
+      outFields: ['*'],
+      fields: [{ name: 'id', alias: 'id', type: 'oid' },
+      { name: 'pointType', alias: 'pointType', type: 'integer' }
+      ],
+      renderer: {
+        type: 'unique-value',
+        field: 'pointType',
+        uniqueValueInfos: [
+          { value: 1, symbol: setSymbol('/img/jcc1.png') },
+          { value: 2, symbol: setSymbol('/img/jcc2.png') },
+          { value: 3, symbol: setSymbol('/img/jcc3.png') },
+          { value: 4, symbol: setSymbol('/img/jcc4.png') }]
+
+      }
+    })
+   mapview.map.add(pFlayer)
+
+  }
+
+ function  loadclMap  ()  {
+    if (paths &&paths[0].length > 0 &&image) {
+     moveCarGra = new Graphic({
+        geometry: new Point({
+          x:paths[0][0][0],
+          y:paths[0][0][1]
+        }),
+        symbol: setSymbolAndAngle(image,calcAngle(paths[0][0][0],paths[0][0][1],paths[0][1][0],paths[0][1][1]) +angleSet)
+      })
+     layerp.graphics.add(moveCarGra)
+     mapview.map.add(layerp)
+     start()
+    }
+  }
+  // 车辆开始移动
+ function move (start, end) {
+    const x1 =paths[0][start][0]
+    const y1 =paths[0][start][1]
+    const x2 =paths[0][end][0]
+    const y2 =paths[0][end][1]
+    const v =speed
+    if (Math.abs(x2 - x1) <= v && Math.abs(y2 - y1) <= v) {
+      clearInterval(moving)
+      if (end + 1 <paths[0].length) {
+       layerp.graphics.removeAll()
+        const point =moveCarGra
+        point.geometry.x =paths[0][start + 1][0]
+        point.geometry.y =paths[0][start + 1][1]
+       layerp.graphics.add(point)
+       move(start + 1, end + 1)
+      }
+
+      return
+    }
+    const angle =calcAngle(x1, y1, x2, y2)
+    // 斜率
+    const p = (y2 - y1) / (x2 - x1)
+
+   moving = setInterval(() => {
+     startNum = start
+     endNum = end
+     layerp.graphics.removeAll()
+      // 分别计算 x,y轴的方向和速度
+      if (Math.abs(p) === Number.POSITIVE_INFINITY) {
+        // 垂直的时候斜率无穷大
+        const point =moveCarGra.geometry
+        if (y2 > y1) {
+          point.y += v
+        } else {
+          point.y -= v
+        }
+
+        // 创建行驶车辆
+       moveCarGra = new Graphic({
+          geometry: new Point({
+            x: point.x,
+            y: point.y
+          }),
+          symbol: setSymbolAndAngle(image, angle)
+        })
+       layerp.graphics.add(moveCarGra)
+      } else {
+        const point =moveCarGra.geometry
+        if (x2 < x1) {
+          point.x -= (1 / Math.sqrt(1 + p * p)) * v
+          point.y -= (p / Math.sqrt(1 + p * p)) * v
+        } else {
+          point.x += (1 / Math.sqrt(1 + p * p)) * v
+          point.y += (p / Math.sqrt(1 + p * p)) * v
+        }
+        // 创建行驶车辆
+       moveCarGra = new Graphic({
+          geometry: new Point({
+            x: point.x,
+            y: point.y
+          }),
+          symbol: setSymbolAndAngle(image, angle)
+        })
+       layerp.graphics.add(moveCarGra)
+      }
+      const point =moveCarGra.geometry
+      if (Math.abs(point.x - x2) <= 1.5 * v && Math.abs(point.y - y2) <= 1.5 * v) {
+        clearInterval(moving)
+       startNum = start++
+       endNum = end++
+        const point =moveCarGra
+        point.geometry.x =paths[0][startNum + 1][0]
+        point.geometry.y =paths[0][startNum + 1][1]
+       layerp.graphics.add(point)
+        if (end <paths[0].length) {
+         move(start, end)
+        }
+      }
+    }, 1000)
+  }
+  // 车辆开始
+  function start() {
+   layerp.graphics.removeAll()
+   move(0, 1)
+  }
+  // 车辆暂停
+ function stopMove() {
+    clearInterval(moving)
+  }
+  // 车辆继续
+ function goOn() {
+    if (moving !== undefined) {
+      clearInterval(moving) // 清除移动
+    }
+
+   move(startNum,endNum)
+  }
+  // 车辆返回
+ function  back() {
+    if (moving != null) {
+      clearInterval(moving) // 清除移动
+    }
+   layerp.graphics.removeAll()
+   loadclMap(paths,image,angleSet)
+   mapview.goTo(paths[0]);
+
+  }
+  function clearAllLayer (){
+   stopMove()
+   mapview.map.remove(layerline) 
+   mapview.map.remove(layerp) 
+    reMoveLayerByid("qcpointid")   
+  }
+      
+  function init(){
+   	   paths = [[[109.555392, 38.27874],[109.514736,38.264428],[109.500632,38.214112],[109.465376,38.01246],[109.463968,38.01186],[ 109.502056,38.212448],[109.480208,38.230084],[109.49764,38.33666]]] 
+     points = [{LNG:109.555392, LAT:38.27874,pointType:1,id:0},
+      {LAT: 38.264428,LNG: 109.514736,pointType:3,id:1},
+      {LAT: 38.214112, LNG: 109.500632,pointType:3,id:2},
+      { LAT: 38.01246, LNG: 109.465376,pointType:2,id:3},
+
+      {LAT: 38.01186,LNG: 109.463968,pointType:1,id:4},
+      {LAT: 38.212448, LNG: 109.502056,pointType:3,id:5},
+      {LAT: 38.230084, LNG: 109.480208,pointType:3,id:6},
+      {LAT: 38.336668, LNG: 109.49764,pointType:2,id:7},
+    ] 
+      image='/img/cl.png',
+      angleSet=-90
+      loadMapLineAndPoints()
+     loadclMap()
+   }
+  init();
+    });
+    </script>
+  </head>
+
+  <body>
+    <div id="viewDiv"></div>
+
+
+  </body>
+</html>
